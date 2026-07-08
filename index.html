@@ -37,15 +37,18 @@
             color: #666;
             margin-bottom: 30px;
         }
-        /* 설정 영역 */
-        .setup-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 15px;
+        /* 설정 영역 크기 및 레이아웃 조절 */
+        .setup-container {
             background: #ecf0f1;
             padding: 20px;
             border-radius: 8px;
             margin-bottom: 30px;
+        }
+        .setup-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
         }
         .input-group {
             display: flex;
@@ -64,13 +67,52 @@
             border-radius: 6px;
             text-align: center;
         }
-        .btn-wrapper {
+        /* 꽝 위치 선택지 라디오 버튼 그룹 스타일 */
+        .radio-group-container {
             display: flex;
-            align-items: flex-end;
+            flex-direction: column;
+            gap: 8px;
+            background: #ffffff;
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid #dcdde1;
+        }
+        .radio-group-container label.group-title {
+            font-weight: bold;
+            color: #34495e;
+            font-size: 14px;
+        }
+        .radio-options {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 5px;
+        }
+        .radio-label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            font-size: 15px;
+            background: #f8f9fa;
+            padding: 6px 12px;
+            border-radius: 4px;
+            border: 1px solid #ced4da;
+            transition: all 0.2s;
+        }
+        .radio-label:hover {
+            background: #e9ecef;
+        }
+        .radio-label input[type="radio"]:checked + span {
+            font-weight: bold;
+            color: #e74c3c;
+        }
+        .btn-wrapper {
+            margin-top: 15px;
         }
         button {
             width: 100%;
-            padding: 12px;
+            padding: 14px;
             font-size: 16px;
             background-color: #2ecc71;
             color: white;
@@ -85,7 +127,7 @@
         }
         /* 결과 뷰포트 (그래프 및 표) */
         .result-section {
-            display: none; /* 초기에는 숨김 */
+            display: none;
             margin-top: 20px;
         }
         .content-layout {
@@ -145,23 +187,28 @@
     <h1>🪜 사다리 타기 확률 시뮬레이터</h1>
     <div class="description">출발점 개수, 사다리 높이, 실행 횟수 및 꽝의 위치를 지정하여 실험할 수 있습니다.</div>
     
-    <div class="setup-grid">
-        <div class="input-group">
-            <label for="nodeCount">출발점/도착점 개수</label>
-            <input type="number" id="nodeCount" value="5" min="2" max="30" onchange="updateMaxFailIndex()">
+    <div class="setup-container">
+        <div class="setup-grid">
+            <div class="input-group">
+                <label for="nodeCount">출발점/도착점 개수</label>
+                <input type="number" id="nodeCount" value="5" min="2" max="30" oninput="renderFailRadioButtons()">
+            </div>
+            <div class="input-group">
+                <label for="ladderHeight">사다리 줄 개수 (높이)</label>
+                <input type="number" id="ladderHeight" value="10" min="1" max="100">
+            </div>
+            <div class="input-group">
+                <label for="trialCount">시뮬레이션 실행 횟수</label>
+                <input type="number" id="trialCount" value="5000" min="1" max="100000">
+            </div>
         </div>
-        <div class="input-group">
-            <label for="failPosition">꽝의 위치 (도착지 번호)</label>
-            <input type="number" id="failPosition" value="1" min="1" max="5">
+
+        <div class="radio-group-container">
+            <label class="group-title">🎯 꽝의 위치 선택 (도착지 번호)</label>
+            <div id="radioOptionsWrapper" class="radio-options">
+                </div>
         </div>
-        <div class="input-group">
-            <label for="ladderHeight">사다리 줄 개수 (높이)</label>
-            <input type="number" id="ladderHeight" value="10" min="1" max="100">
-        </div>
-        <div class="input-group">
-            <label for="trialCount">시뮬레이션 실행 횟수</label>
-            <input type="number" id="trialCount" value="5000" min="1" max="100000">
-        </div>
+
         <div class="btn-wrapper">
             <button onclick="runSimulation()">시뮬레이션 시작</button>
         </div>
@@ -197,38 +244,63 @@
 <script>
 let currentChart = null;
 
-// 출발점 개수가 바뀌면 꽝의 위치 최대값(max)도 자동으로 동기화되는 함수
-function updateMaxFailIndex() {
-    const nodeCount = document.getElementById('nodeCount').value;
-    const failPositionInput = document.getElementById('failPosition');
-    failPositionInput.max = nodeCount;
+// 페이지가 처음 열릴 때 선택지를 만들어주기 위한 초기 실행
+window.onload = function() {
+    renderFailRadioButtons();
+};
+
+// 출발점 개수에 따라 라디오 버튼 선택지를 화면에 다시 그려주는 함수
+function renderFailRadioButtons() {
+    const numLines = parseInt(document.getElementById('nodeCount').value);
+    const wrapper = document.getElementById('radioOptionsWrapper');
     
-    // 만약 현재 입력된 꽝의 위치가 새로운 최대값보다 크다면 최대값으로 강제 조정
-    if (parseInt(failPositionInput.value) > parseInt(nodeCount)) {
-        failPositionInput.value = nodeCount;
+    // 현재 선택되어 있던 값을 임시 기억 (개수가 바뀌어도 선택 유지 유도용)
+    const checkedRadio = document.querySelector('input[name="failPosRadio"]:checked');
+    let previousValue = checkedRadio ? parseInt(checkedRadio.value) : 1;
+
+    // 만약 이전 선택값이 바뀐 최대 범위를 넘어서면 1번으로 초기화
+    if (previousValue > numLines || previousValue < 1) {
+        previousValue = 1;
+    }
+
+    wrapper.innerHTML = ''; // 기존 선택지 초기화
+
+    // 1번부터 설정된 출발점 개수만큼 동적으로 선택지 라디오 생성
+    for (let i = 1; i <= numLines; i++) {
+        const isChecked = (i === previousValue) ? 'checked' : '';
+        const labelText = `
+            <label class="radio-label">
+                <input type="radio" name="failPosRadio" value="${i}" ${isChecked}>
+                <span>${i}번</span>
+            </label>
+        `;
+        wrapper.insertAdjacentHTML('beforeend', labelText);
     }
 }
 
 function runSimulation() {
     const numLines = parseInt(document.getElementById('nodeCount').value);
-    const failPosition = parseInt(document.getElementById('failPosition').value);
     const ladderHeight = parseInt(document.getElementById('ladderHeight').value);
     const trials = parseInt(document.getElementById('trialCount').value);
 
+    // 라디오 버튼 그룹에서 사용자가 체크한 항목의 value(꽝의 번호) 가져오기
+    const selectedRadio = document.querySelector('input[name="failPosRadio"]:checked');
+    if (!selectedRadio) {
+        alert('꽝의 위치를 선택해주세요.');
+        return;
+    }
+    const failPosition = parseInt(selectedRadio.value);
+
     // 예외 처리 유효성 검사
     if (isNaN(numLines) || numLines < 2) { alert('출발점은 최소 2개 이상이어야 합니다.'); return; }
-    if (isNaN(failPosition) || failPosition < 1 || failPosition > numLines) { 
-        alert(`꽝의 위치는 1번부터 ${numLines}번 사이여야 합니다.`); 
-        return; 
-    }
     if (isNaN(ladderHeight) || ladderHeight < 1) { alert('사다리 높이는 1 이상이어야 합니다.'); return; }
     if (isNaN(trials) || trials <= 0) { alert('실행 횟수를 올바르게 입력해주세요.'); return; }
 
-    // 컴퓨터 인덱스는 0부터 시작하므로 사용자가 입력한 번호에서 1을 뺍니다.
+    // 컴퓨터 연산용 0배이스 인덱스 변환
     const failIndex = failPosition - 1; 
     let failCounts = new Array(numLines).fill(0); 
 
-    // 대량 시뮬레이션 루프 수행
+    // 시뮬레이션 계산 로직
     for (let t = 0; t < trials; t++) {
         let ladder = [];
         for (let h = 0; h < ladderHeight; h++) {
@@ -252,17 +324,15 @@ function runSimulation() {
                     currentLine--;
                 }
             }
-            // 최종 도착지가 사용자가 지정한 꽝의 인덱스와 일치하는지 확인
             if (currentLine === failIndex) {
                 failCounts[start]++;
             }
         }
     }
 
-    // 결과 제목 업데이트
+    // 분석 타이틀 및 표 화면 반영
     document.getElementById('resultTitle').innerText = `📊 시뮬레이션 결과 분석 (도착지: ${failPosition}번 위치가 '꽝')`;
 
-    // 화면에 데이터 테이블(표) 업데이트
     const resultBody = document.getElementById('resultBody');
     resultBody.innerHTML = ''; 
 
@@ -283,7 +353,7 @@ function runSimulation() {
         resultBody.appendChild(row);
     }
 
-    // Chart.js 그래프 업데이트
+    // Chart.js 그래프 반영
     const ctx = document.getElementById('probabilityChart').getContext('2d');
     if (currentChart) {
         currentChart.destroy();
@@ -294,7 +364,7 @@ function runSimulation() {
         data: {
             labels: chartLabels,
             datasets: [{
-                label: `${failPosition}번 도착지(꽝)에 걸릴 확률 (%)`,
+                label: `${failPosition}번 도착지(꽝)에 도달할 확률 (%)`,
                 data: chartData,
                 backgroundColor: 'rgba(52, 152, 219, 0.7)',
                 borderColor: 'rgba(41, 128, 185, 1)',
